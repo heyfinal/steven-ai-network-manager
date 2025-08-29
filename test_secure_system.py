@@ -117,8 +117,8 @@ def test_dependencies():
     print("\n📦 Testing Security Dependencies...")
     
     required_packages = [
-        'bcrypt', 'pyjwt', 'cryptography', 'flask_limiter', 
-        'flask_socketio', 'python_dotenv'
+        'bcrypt', 'jwt', 'cryptography', 'flask_limiter', 
+        'flask_socketio', 'dotenv'
     ]
     
     missing_packages = []

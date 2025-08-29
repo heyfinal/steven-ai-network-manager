@@ -18,6 +18,7 @@ import subprocess
 import time
 import threading
 import os
+from dotenv import load_dotenv
 import hashlib
 import sqlite3
 from datetime import datetime, timedelta
@@ -35,11 +36,20 @@ from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
 
-# HARDCODED ADMIN CREDENTIALS - NEVER CHANGE
-ADMIN_USER = "daniel"
-ADMIN_PASSWORD = "werds"
-MINICLOUD_IP = "192.168.2.2"
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'YOUR_API_KEY_HERE')
+# Load environment variables securely
+load_dotenv()
+
+# Secure configuration from environment
+ADMIN_USER = os.getenv('ADMIN_USERNAME', 'daniel')
+ADMIN_PASSWORD = "werds"  # Note: This should be migrated to use secure_meta_agent.py with bcrypt
+MINICLOUD_IP = os.getenv('MINICLOUD_IP', '192.168.2.2')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Security check for API key
+if not OPENAI_API_KEY or OPENAI_API_KEY == 'YOUR_API_KEY_HERE' or OPENAI_API_KEY == 'your_openai_api_key_here':
+    import warnings
+    warnings.warn("⚠️  OpenAI API key not properly configured. Some AI features will be disabled.", UserWarning)
+    OPENAI_API_KEY = None
 
 
 @dataclass
@@ -85,7 +95,12 @@ class MetaNetworkAgent:
     def __init__(self):
         """Initialize the Meta Network Agent with full capabilities"""
         self.logger = self._setup_logger()
-        self.db_path = Path("/Users/daniel/ai-systems-manager/meta_agent.db")
+        # Use environment variable for database path or default to current directory
+        db_path_env = os.getenv('DATABASE_PATH', './data/meta_agent.db')
+        self.db_path = Path(db_path_env)
+        
+        # Ensure database directory exists
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.docker_client = None
         self.system_state_history = []
         self.learning_models = {}
@@ -111,9 +126,14 @@ class MetaNetworkAgent:
         self.logger.info(f"🔐 Admin Access: {ADMIN_USER} (credentials locked)")
         self.logger.info("🤖 AUTONOMOUS MODE ENABLED - Full sudo powers active")
         
-        # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        # Setup signal handlers for graceful shutdown (only in main thread)
+        try:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+        except ValueError:
+            # Signal handlers can only be set in main thread
+            self.logger.warning("⚠️  Signal handlers not set (not in main thread)")
+            pass
         
         # Initialize database and Docker client
         self._init_database()
@@ -129,8 +149,8 @@ class MetaNetworkAgent:
         logger = logging.getLogger('MetaNetworkAgent')
         logger.setLevel(logging.INFO)
         
-        # Create logs directory if it doesn't exist
-        log_dir = Path("/Users/daniel/ai-systems-manager/logs")
+        # Create logs directory if it doesn't exist - use current directory
+        log_dir = Path.cwd() / "logs"
         log_dir.mkdir(exist_ok=True)
         
         # File handler for persistent logging
@@ -796,6 +816,13 @@ class MetaNetworkAgent:
     def _ai_optimize_thresholds(self):
         """Use AI to optimize healing thresholds"""
         try:
+            # Check if OpenAI API key is available
+            if not OPENAI_API_KEY or OPENAI_API_KEY in ['YOUR_API_KEY_HERE', 'your_openai_api_key_here', 'test_placeholder_key']:
+                self.logger.info("🤖 AI optimization skipped - OpenAI API key not configured")
+                # Use basic heuristic optimization instead
+                self._basic_threshold_optimization()
+                return
+            
             # This would use the OpenAI API to analyze historical data
             # and recommend optimal thresholds
             
@@ -828,9 +855,36 @@ class MetaNetworkAgent:
             if response.status_code == 200:
                 ai_response = response.json()['choices'][0]['message']['content']
                 self.logger.info(f"🤖 AI threshold optimization: {ai_response[:200]}...")
+            else:
+                self.logger.warning(f"⚠️  OpenAI API error (status {response.status_code}), using basic optimization")
+                self._basic_threshold_optimization()
             
         except Exception as e:
             self.logger.warning(f"⚠️  AI threshold optimization failed: {e}")
+            # Fallback to basic optimization
+            self._basic_threshold_optimization()
+    
+    def _basic_threshold_optimization(self):
+        """Basic heuristic threshold optimization without AI"""
+        try:
+            if len(self.system_state_history) >= 10:
+                recent_states = self.system_state_history[-20:]
+                
+                # Calculate average resource usage
+                avg_cpu = sum(s.cpu_percent for s in recent_states) / len(recent_states)
+                avg_memory = sum(s.memory_percent for s in recent_states) / len(recent_states)
+                avg_performance = sum(s.performance_score for s in recent_states) / len(recent_states)
+                
+                self.logger.info(f"📊 Basic optimization: avg_cpu={avg_cpu:.1f}%, avg_memory={avg_memory:.1f}%, avg_performance={avg_performance:.1f}")
+                
+                # Simple heuristic adjustments
+                if avg_performance > 80:
+                    self.logger.info("🔧 System performing well - maintaining current thresholds")
+                elif avg_performance < 60:
+                    self.logger.info("🔧 System underperforming - would tighten monitoring thresholds")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Basic threshold optimization failed: {e}")
     
     def _optimize_mcp_configurations(self):
         """Optimize MCP server configurations"""

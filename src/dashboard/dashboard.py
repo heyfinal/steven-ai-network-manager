@@ -36,7 +36,17 @@ except ImportError:
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
 app.secret_key = hashlib.sha256(f"{ADMIN_USER}{ADMIN_PASSWORD}".encode()).hexdigest()
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Secure CORS configuration - restrict to local network and development
+allowed_origins = [
+    "http://192.168.2.2:5001",
+    "http://localhost:5001", 
+    "http://127.0.0.1:5001",
+    "http://192.168.1.*:5001",  # Local network range
+    "http://192.168.2.*:5001"   # Minicloud network range
+]
+
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
 
 
 @app.route('/')
@@ -113,16 +123,63 @@ def execute_healing_action():
         if not command:
             return jsonify({'error': 'No command provided'}), 400
         
-        # Execute the command (admin has full power)
-        import subprocess
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
+        # SECURITY: Use secure agent for command validation and execution
+        agent = get_meta_agent()
         
-        return jsonify({
-            'success': result.returncode == 0,
-            'stdout': result.stdout,
-            'stderr': result.stderr,
-            'returncode': result.returncode
-        })
+        # Check if we have the secure agent with command validation
+        if hasattr(agent, 'validate_and_execute_command'):
+            # Use secure command execution with validation
+            result = agent.validate_and_execute_command(command, risk_tolerance='medium')
+            return jsonify(result)
+        else:
+            # Fallback with basic command whitelist for legacy meta_agent
+            allowed_commands = [
+                'systemctl status', 'systemctl restart', 'systemctl start', 'systemctl stop',
+                'docker ps', 'docker restart', 'docker logs', 'docker stats',
+                'ps aux', 'df -h', 'free -m', 'uptime', 'whoami',
+                'journalctl -u', 'tail -f', 'cat /var/log/',
+                'netstat -tuln', 'ss -tuln', 'ping -c'
+            ]
+            
+            # Check if command starts with any allowed command
+            command_safe = False
+            for allowed in allowed_commands:
+                if command.strip().startswith(allowed):
+                    command_safe = True
+                    break
+            
+            if not command_safe:
+                return jsonify({
+                    'success': False,
+                    'error': 'Command not in whitelist. Use secure deployment for advanced commands.',
+                    'allowed_commands': allowed_commands
+                }), 403
+            
+            # Execute the validated command with restrictions
+            import subprocess
+            try:
+                result = subprocess.run(
+                    command, 
+                    shell=True, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=30,
+                    cwd='/tmp',  # Safe working directory
+                    env={'PATH': '/usr/bin:/bin'}  # Minimal environment
+                )
+                
+                return jsonify({
+                    'success': result.returncode == 0,
+                    'stdout': result.stdout[:1000],  # Limit output size
+                    'stderr': result.stderr[:1000],  # Limit output size
+                    'returncode': result.returncode,
+                    'security_note': 'Command executed with security restrictions'
+                })
+            except subprocess.TimeoutExpired:
+                return jsonify({
+                    'success': False,
+                    'error': 'Command timeout (30 seconds)'
+                }), 408
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
