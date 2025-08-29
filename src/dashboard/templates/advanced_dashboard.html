@@ -1,0 +1,1502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Steven - AI Network Managing Agent</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        :root {
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --secondary-gradient: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --accent-gradient: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-glass: rgba(255, 255, 255, 0.05);
+            --bg-glass-hover: rgba(255, 255, 255, 0.1);
+            --text-primary: #ffffff;
+            --text-secondary: #b8c5d1;
+            --text-muted: #8892b0;
+            --border-glass: rgba(255, 255, 255, 0.1);
+            --shadow: 0 8px 32px rgba(31, 38, 135, 0.37);
+            --shadow-hover: 0 12px 40px rgba(31, 38, 135, 0.5);
+            --success: #64ffda;
+            --warning: #ffab40;
+            --error: #ff5252;
+            --info: #40c4ff;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-primary);
+            background-image: 
+                radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%);
+            color: var(--text-primary);
+            overflow-x: hidden;
+        }
+
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: 280px 1fr 350px;
+            grid-template-rows: auto 1fr;
+            height: 100vh;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .header {
+            grid-column: 1 / -1;
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 15px;
+            padding: 15px 25px;
+            box-shadow: var(--shadow);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-gradient);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+        }
+
+        .logo-text h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: var(--primary-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .logo-text p {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: -2px;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: 600;
+            color: var(--success);
+        }
+
+        .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .sidebar {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 15px;
+            padding: 25px 0;
+            box-shadow: var(--shadow);
+            overflow-y: auto;
+        }
+
+        .nav-section {
+            margin-bottom: 30px;
+        }
+
+        .nav-title {
+            padding: 0 25px 15px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 25px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-left: 3px solid transparent;
+        }
+
+        .nav-item:hover {
+            background: var(--bg-glass-hover);
+            border-left-color: var(--info);
+        }
+
+        .nav-item.active {
+            background: var(--bg-glass-hover);
+            border-left-color: var(--success);
+        }
+
+        .nav-icon {
+            width: 20px;
+            height: 20px;
+            margin-right: 12px;
+            opacity: 0.7;
+        }
+
+        .main-content {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: var(--shadow);
+            overflow-y: auto;
+        }
+
+        .right-sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .widget {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: var(--shadow);
+        }
+
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .widget-title {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .tab-container {
+            margin-top: 15px;
+        }
+
+        .tab-nav {
+            display: flex;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 5px;
+            margin-bottom: 15px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 8px 12px;
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .tab-btn.active {
+            background: var(--primary-gradient);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .container-item, .server-item, .tool-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--success);
+        }
+
+        .container-item.suggested {
+            border-left-color: var(--warning);
+        }
+
+        .item-info {
+            flex: 1;
+        }
+
+        .item-name {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 13px;
+        }
+
+        .item-status {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .status-indicator {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .status-indicator.offline {
+            background: var(--error);
+        }
+
+        .status-indicator.warning {
+            background: var(--warning);
+        }
+
+        .log-container {
+            height: 200px;
+            overflow-y: auto;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+
+        .log-entry {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .log-entry.info {
+            background: rgba(64, 196, 255, 0.1);
+            border-left: 3px solid var(--info);
+        }
+
+        .log-entry.success {
+            background: rgba(100, 255, 218, 0.1);
+            border-left: 3px solid var(--success);
+        }
+
+        .log-entry.warning {
+            background: rgba(255, 171, 64, 0.1);
+            border-left: 3px solid var(--warning);
+        }
+
+        .log-entry.error {
+            background: rgba(255, 82, 82, 0.1);
+            border-left: 3px solid var(--error);
+        }
+
+        .log-timestamp {
+            color: var(--text-muted);
+            margin-right: 8px;
+        }
+
+        .chart-container {
+            height: 200px;
+            position: relative;
+        }
+
+        .metric-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .metric-card {
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .metric-value {
+            font-size: 24px;
+            font-weight: 700;
+            color: var(--success);
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: var(--text-muted);
+            margin-top: 5px;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 6px;
+            background: var(--bg-secondary);
+            border-radius: 3px;
+            margin-top: 8px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: var(--success);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+        }
+
+        .settings-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 10px;
+        }
+
+        .setting-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-glass);
+        }
+
+        .setting-item:last-child {
+            border-bottom: none;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 40px;
+            height: 20px;
+            background: var(--bg-secondary);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background 0.3s ease;
+        }
+
+        .toggle-switch.active {
+            background: var(--success);
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 2px;
+            left: 2px;
+            width: 16px;
+            height: 16px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s ease;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(20px);
+        }
+
+        .terminal-container {
+            height: 300px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .command-input-section {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid var(--border-glass);
+        }
+
+        .command-input-form {
+            display: flex;
+            gap: 10px;
+        }
+
+        .command-input {
+            flex: 1;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-glass);
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-family: 'Courier New', monospace;
+        }
+
+        .command-input:focus {
+            outline: none;
+            border-color: var(--success);
+            box-shadow: 0 0 0 2px rgba(100, 255, 218, 0.2);
+        }
+
+        .command-btn {
+            background: var(--primary-gradient);
+            border: none;
+            border-radius: 8px;
+            padding: 10px 15px;
+            color: white;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .command-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: var(--shadow-hover);
+        }
+
+        .quick-commands {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+
+        .quick-cmd {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-glass);
+            border-radius: 6px;
+            padding: 5px 8px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .quick-cmd:hover {
+            background: var(--bg-glass-hover);
+            color: var(--text-primary);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .loading {
+            animation: pulse 1.5s infinite;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .connection-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .connection-dot.disconnected {
+            background: var(--error);
+        }
+
+        .healing {
+            border-left-color: var(--warning) !important;
+            background: linear-gradient(-45deg, rgba(255, 171, 64, 0.1), rgba(255, 171, 64, 0.05));
+            animation: healingPulse 2s infinite;
+        }
+
+        @keyframes healingPulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+
+        .alert-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            max-width: 400px;
+            z-index: 1000;
+        }
+
+        .alert {
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            box-shadow: var(--shadow);
+            border-left: 4px solid var(--error);
+        }
+
+        .alert.warning {
+            border-left-color: var(--warning);
+        }
+
+        .alert.success {
+            border-left-color: var(--success);
+        }
+
+        .alert.info {
+            border-left-color: var(--info);
+        }
+
+        .alert-title {
+            font-weight: 600;
+            margin-bottom: 5px;
+            color: var(--text-primary);
+        }
+
+        .alert-message {
+            font-size: 13px;
+            color: var(--text-secondary);
+            margin-bottom: 8px;
+        }
+
+        .alert-fix {
+            font-size: 12px;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="alert-container" id="alert-container">
+        <!-- Dynamic alerts will appear here -->
+    </div>
+    
+    <div class="dashboard-container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">S</div>
+                    <div class="logo-text">
+                        <h1>Steven</h1>
+                        <p>AI Network Managing Agent & Autonomous Repair Tech</p>
+                    </div>
+                </div>
+                <div class="header-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="cpu-stat">0%</div>
+                        <div class="stat-label">CPU</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="memory-stat">0%</div>
+                        <div class="stat-label">Memory</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="containers-stat">0</div>
+                        <div class="stat-label">Containers</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="servers-stat">0</div>
+                        <div class="stat-label">MCP Servers</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="api-today-stat">0</div>
+                        <div class="stat-label">API Today</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="api-month-stat">0</div>
+                        <div class="stat-label">API Month</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="api-avg-stat">0</div>
+                        <div class="stat-label">API Avg/Day</div>
+                    </div>
+                    <div class="connection-status">
+                        <div class="connection-dot" id="connection-indicator"></div>
+                        <span id="connection-text">Connected</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <div class="nav-section">
+                <div class="nav-title">Dashboard</div>
+                <div class="nav-item active" data-view="overview">
+                    <div class="nav-icon">📊</div>
+                    <span>Overview</span>
+                </div>
+                <div class="nav-item" data-view="containers">
+                    <div class="nav-icon">🐳</div>
+                    <span>Containers</span>
+                </div>
+                <div class="nav-item" data-view="mcp-servers">
+                    <div class="nav-icon">🖥️</div>
+                    <span>MCP Servers</span>
+                </div>
+                <div class="nav-item" data-view="mcu-tools">
+                    <div class="nav-icon">🔧</div>
+                    <span>MCU Tools</span>
+                </div>
+            </div>
+            <div class="nav-section">
+                <div class="nav-title">System</div>
+                <div class="nav-item" data-view="healing-actions">
+                    <div class="nav-icon">🔄</div>
+                    <span>Healing Actions</span>
+                </div>
+                <div class="nav-item" data-view="ai-evolution">
+                    <div class="nav-icon">🧠</div>
+                    <span>AI Evolution</span>
+                </div>
+                <div class="nav-item" data-view="analytics">
+                    <div class="nav-icon">📈</div>
+                    <span>Analytics</span>
+                </div>
+                <div class="nav-item" data-view="terminal">
+                    <div class="nav-icon">💻</div>
+                    <span>Terminal</span>
+                </div>
+                <div class="nav-item" data-view="settings">
+                    <div class="nav-icon">⚙️</div>
+                    <span>Settings</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- Overview View -->
+            <div id="overview-view" class="view-content">
+                <h2>System Overview</h2>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="overview-cpu">0%</div>
+                        <div class="metric-label">CPU Usage</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="cpu-progress"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="overview-memory">0%</div>
+                        <div class="metric-label">Memory Usage</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="memory-progress"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="overview-disk">0%</div>
+                        <div class="metric-label">Disk Usage</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="disk-progress"></div>
+                        </div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="overview-network">0</div>
+                        <div class="metric-label">Network I/O</div>
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="network-progress"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Containers View -->
+            <div id="containers-view" class="view-content hidden">
+                <h2>Docker Containers</h2>
+                <div id="containers-content">Loading containers...</div>
+            </div>
+
+            <!-- MCP Servers View -->
+            <div id="mcp-servers-view" class="view-content hidden">
+                <h2>MCP Servers</h2>
+                <div id="mcp-servers-content">Loading MCP servers...</div>
+            </div>
+
+            <!-- MCU Tools View -->
+            <div id="mcu-tools-view" class="view-content hidden">
+                <h2>MCU Development Tools</h2>
+                <div id="mcu-tools-content">
+                    <div class="tool-item">
+                        <div class="item-info">
+                            <div class="item-name">Arduino IDE</div>
+                            <div class="item-status">Development Environment</div>
+                        </div>
+                        <div class="status-indicator"></div>
+                    </div>
+                    <div class="tool-item">
+                        <div class="item-info">
+                            <div class="item-name">PlatformIO</div>
+                            <div class="item-status">Cross-platform IDE</div>
+                        </div>
+                        <div class="status-indicator"></div>
+                    </div>
+                    <div class="tool-item">
+                        <div class="item-info">
+                            <div class="item-name">ESP-IDF</div>
+                            <div class="item-status">ESP32 Framework</div>
+                        </div>
+                        <div class="status-indicator"></div>
+                    </div>
+                    <div class="tool-item">
+                        <div class="item-info">
+                            <div class="item-name">OpenOCD</div>
+                            <div class="item-status">On-Chip Debugger</div>
+                        </div>
+                        <div class="status-indicator warning"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Healing Actions View -->
+            <div id="healing-actions-view" class="view-content hidden">
+                <h2>System Healing Actions</h2>
+                <div class="log-container" id="healing-log">
+                    <!-- Healing logs will be populated here -->
+                </div>
+            </div>
+
+            <!-- AI Evolution View -->
+            <div id="ai-evolution-view" class="view-content hidden">
+                <h2>AI Evolution Log</h2>
+                <div class="log-container" id="evolution-log">
+                    <!-- Evolution logs will be populated here -->
+                </div>
+            </div>
+
+            <!-- Analytics View -->
+            <div id="analytics-view" class="view-content hidden">
+                <h2>System Analytics</h2>
+                <div class="chart-container">
+                    <canvas id="analyticsChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Terminal View -->
+            <div id="terminal-view" class="view-content hidden">
+                <h2>System Terminal</h2>
+                <div class="terminal-container" id="terminal"></div>
+            </div>
+
+            <!-- Settings View -->
+            <div id="settings-view" class="view-content hidden">
+                <h2>System Settings</h2>
+                <div class="settings-group">
+                    <div class="settings-title">System Monitoring</div>
+                    <div class="setting-item">
+                        <span>Auto-healing enabled</span>
+                        <div class="toggle-switch active" data-setting="auto-healing"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Real-time updates</span>
+                        <div class="toggle-switch active" data-setting="real-time"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Email notifications</span>
+                        <div class="toggle-switch" data-setting="email-notifications"></div>
+                    </div>
+                </div>
+                <div class="settings-group">
+                    <div class="settings-title">Security</div>
+                    <div class="setting-item">
+                        <span>Two-factor authentication</span>
+                        <div class="toggle-switch" data-setting="2fa"></div>
+                    </div>
+                    <div class="setting-item">
+                        <span>Audit logging</span>
+                        <div class="toggle-switch active" data-setting="audit-log"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Sidebar -->
+        <div class="right-sidebar">
+            <!-- Containers Widget -->
+            <div class="widget">
+                <div class="widget-header">
+                    <div class="widget-title">Containers</div>
+                </div>
+                <div class="tab-container">
+                    <div class="tab-nav">
+                        <button class="tab-btn active" data-tab="active-containers">Active</button>
+                        <button class="tab-btn" data-tab="suggested-containers">Suggested</button>
+                        <button class="tab-btn" data-tab="catalog-containers">Catalog</button>
+                    </div>
+                    <div id="active-containers" class="tab-content active">
+                        <!-- Active containers will be populated here -->
+                    </div>
+                    <div id="suggested-containers" class="tab-content">
+                        <div class="container-item suggested">
+                            <div class="item-info">
+                                <div class="item-name">Redis</div>
+                                <div class="item-status">Recommended for caching</div>
+                            </div>
+                        </div>
+                        <div class="container-item suggested">
+                            <div class="item-info">
+                                <div class="item-name">Elasticsearch</div>
+                                <div class="item-status">Log analysis</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="catalog-containers" class="tab-content">
+                        <div class="container-item">
+                            <div class="item-info">
+                                <div class="item-name">PostgreSQL</div>
+                                <div class="item-status">Database</div>
+                            </div>
+                        </div>
+                        <div class="container-item">
+                            <div class="item-info">
+                                <div class="item-name">MongoDB</div>
+                                <div class="item-status">NoSQL Database</div>
+                            </div>
+                        </div>
+                        <div class="container-item">
+                            <div class="item-info">
+                                <div class="item-name">NGINX</div>
+                                <div class="item-status">Web Server</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- MCP Servers Widget -->
+            <div class="widget">
+                <div class="widget-header">
+                    <div class="widget-title">MCP Servers</div>
+                </div>
+                <div class="tab-container">
+                    <div class="tab-nav">
+                        <button class="tab-btn active" data-tab="active-servers">Active</button>
+                        <button class="tab-btn" data-tab="suggested-servers">Suggested</button>
+                        <button class="tab-btn" data-tab="catalog-servers">Catalog</button>
+                    </div>
+                    <div id="active-servers" class="tab-content active">
+                        <!-- Active servers will be populated here -->
+                    </div>
+                    <div id="suggested-servers" class="tab-content">
+                        <div class="server-item suggested">
+                            <div class="item-info">
+                                <div class="item-name">File System</div>
+                                <div class="item-status">Recommended</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="catalog-servers" class="tab-content">
+                        <div class="server-item">
+                            <div class="item-info">
+                                <div class="item-name">GitHub</div>
+                                <div class="item-status">Git Integration</div>
+                            </div>
+                        </div>
+                        <div class="server-item">
+                            <div class="item-info">
+                                <div class="item-name">Memory</div>
+                                <div class="item-status">Knowledge Graph</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- OpenAI API Usage Widget -->
+            <div class="widget">
+                <div class="widget-header">
+                    <div class="widget-title">OpenAI API Usage</div>
+                </div>
+                <div class="metric-grid">
+                    <div class="metric-card">
+                        <div class="metric-value" id="api-usage-today">0</div>
+                        <div class="metric-label">Tokens Today</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="api-usage-month">0</div>
+                        <div class="metric-label">Tokens This Month</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="api-cost-today">$0.00</div>
+                        <div class="metric-label">Cost Today</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-value" id="api-cost-month">$0.00</div>
+                        <div class="metric-label">Cost This Month</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-size: 11px; color: var(--text-muted);">
+                    <div>Average Daily: <span id="api-avg-daily">0</span> tokens</div>
+                    <div>Estimated Monthly: <span id="api-est-monthly">$0.00</span></div>
+                </div>
+            </div>
+
+            <!-- Healing Actions Widget -->
+            <div class="widget">
+                <div class="widget-header">
+                    <div class="widget-title">Healing Actions</div>
+                </div>
+                <div class="log-container" id="healing-actions-log" style="height: 120px;">
+                    <!-- Real-time healing actions will appear here -->
+                </div>
+                <div class="command-input-section">
+                    <div class="command-input-form">
+                        <input type="text" class="command-input" id="ai-command-input" placeholder="Send command to Steven...">
+                        <button class="command-btn" onclick="sendAICommand()">Send</button>
+                    </div>
+                    <div class="quick-commands">
+                        <div class="quick-cmd" onclick="sendQuickCommand('refresh memory')">Refresh Memory</div>
+                        <div class="quick-cmd" onclick="sendQuickCommand('troubleshoot offline mcu servers')">Troubleshoot MCU</div>
+                        <div class="quick-cmd" onclick="sendQuickCommand('system health check')">Health Check</div>
+                        <div class="quick-cmd" onclick="sendQuickCommand('optimize performance')">Optimize</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let socket;
+        let terminal;
+        let analyticsChart;
+        let currentData = {};
+
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeSocket();
+            initializeNavigation();
+            initializeTabs();
+            initializeTerminal();
+            initializeAnalytics();
+            initializeSettings();
+            fetchInitialData();
+        });
+
+        // Socket.IO initialization
+        function initializeSocket() {
+            socket = io();
+            
+            socket.on('connect', function() {
+                console.log('Connected to Steven');
+                updateConnectionStatus(true);
+            });
+
+            socket.on('disconnect', function() {
+                console.log('Disconnected from Steven');
+                updateConnectionStatus(false);
+            });
+
+            socket.on('status_update', function(data) {
+                updateDashboard(data);
+            });
+
+            socket.on('healing_action', function(action) {
+                addHealingLogEntry(action);
+            });
+
+            socket.on('ai_evolution', function(evolution) {
+                addEvolutionLogEntry(evolution);
+            });
+        }
+
+        // Update connection status
+        function updateConnectionStatus(connected) {
+            const indicator = document.getElementById('connection-indicator');
+            const text = document.getElementById('connection-text');
+            
+            if (connected) {
+                indicator.classList.remove('disconnected');
+                text.textContent = 'Connected';
+            } else {
+                indicator.classList.add('disconnected');
+                text.textContent = 'Disconnected';
+            }
+        }
+
+        // Navigation
+        function initializeNavigation() {
+            const navItems = document.querySelectorAll('.nav-item');
+            navItems.forEach(item => {
+                item.addEventListener('click', () => {
+                    const view = item.dataset.view;
+                    showView(view);
+                    
+                    navItems.forEach(nav => nav.classList.remove('active'));
+                    item.classList.add('active');
+                });
+            });
+        }
+
+        // Show specific view
+        function showView(viewName) {
+            const views = document.querySelectorAll('.view-content');
+            views.forEach(view => view.classList.add('hidden'));
+            
+            const targetView = document.getElementById(viewName + '-view');
+            if (targetView) {
+                targetView.classList.remove('hidden');
+            }
+        }
+
+        // Tab system
+        function initializeTabs() {
+            const tabBtns = document.querySelectorAll('.tab-btn');
+            tabBtns.forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const tabId = btn.dataset.tab;
+                    const container = btn.closest('.tab-container');
+                    
+                    // Update buttons
+                    container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    
+                    // Update content
+                    container.querySelectorAll('.tab-content').forEach(content => {
+                        content.classList.remove('active');
+                    });
+                    container.querySelector('#' + tabId).classList.add('active');
+                });
+            });
+        }
+
+        // Terminal initialization
+        function initializeTerminal() {
+            if (typeof Terminal !== 'undefined') {
+                terminal = new Terminal({
+                    theme: {
+                        background: '#1a1a2e',
+                        foreground: '#ffffff',
+                        cursor: '#64ffda'
+                    }
+                });
+                
+                const fitAddon = new FitAddon.FitAddon();
+                terminal.loadAddon(fitAddon);
+                
+                terminal.open(document.getElementById('terminal'));
+                fitAddon.fit();
+                
+                terminal.writeln('Welcome to Steven Terminal');
+                terminal.writeln('Type your commands below:');
+                terminal.write('$ ');
+            }
+        }
+
+        // Analytics initialization
+        function initializeAnalytics() {
+            const ctx = document.getElementById('analyticsChart');
+            if (ctx && typeof Chart !== 'undefined') {
+                analyticsChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [{
+                            label: 'CPU Usage',
+                            data: [],
+                            borderColor: '#64ffda',
+                            backgroundColor: 'rgba(100, 255, 218, 0.1)'
+                        }, {
+                            label: 'Memory Usage',
+                            data: [],
+                            borderColor: '#40c4ff',
+                            backgroundColor: 'rgba(64, 196, 255, 0.1)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#ffffff'
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                ticks: {
+                                    color: '#8892b0'
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                }
+                            },
+                            y: {
+                                ticks: {
+                                    color: '#8892b0'
+                                },
+                                grid: {
+                                    color: 'rgba(255, 255, 255, 0.1)'
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Settings initialization
+        function initializeSettings() {
+            const toggles = document.querySelectorAll('.toggle-switch');
+            toggles.forEach(toggle => {
+                toggle.addEventListener('click', () => {
+                    toggle.classList.toggle('active');
+                    const setting = toggle.dataset.setting;
+                    const enabled = toggle.classList.contains('active');
+                    console.log(`Setting ${setting} ${enabled ? 'enabled' : 'disabled'}`);
+                });
+            });
+        }
+
+        // Fetch initial data
+        function fetchInitialData() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => updateDashboard(data))
+                .catch(error => console.error('Error fetching data:', error));
+        }
+
+        // Update dashboard with new data
+        function updateDashboard(data) {
+            if (!data || !data.current_state) return;
+            
+            currentData = data;
+            
+            // Update header stats
+            document.getElementById('cpu-stat').textContent = Math.round(data.current_state.cpu_percent) + '%';
+            document.getElementById('memory-stat').textContent = Math.round(data.current_state.memory_percent) + '%';
+            document.getElementById('containers-stat').textContent = data.current_state.docker_containers?.length || 0;
+            document.getElementById('servers-stat').textContent = data.current_state.mcp_servers?.length || 0;
+            
+            // Update API usage stats in header
+            if (data.api_usage) {
+                document.getElementById('api-today-stat').textContent = formatNumber(data.api_usage.api_used_today);
+                document.getElementById('api-month-stat').textContent = formatNumber(data.api_usage.api_used_month);
+                document.getElementById('api-avg-stat').textContent = formatNumber(data.api_usage.average_daily_tokens);
+            }
+
+            // Update overview metrics
+            updateOverviewMetrics(data.current_state);
+            
+            // Update containers and servers
+            updateContainers(data.current_state.docker_containers || []);
+            updateMCPServers(data.current_state.mcp_servers || []);
+            
+            // Update healing actions
+            if (data.recent_actions) {
+                data.recent_actions.forEach(action => addHealingLogEntry(action));
+            }
+
+            // Update analytics chart
+            updateAnalyticsChart(data.current_state);
+            
+            // Update alerts
+            if (data.alerts) {
+                updateAlerts(data.alerts);
+            }
+            
+            // Update API usage widget
+            if (data.api_usage) {
+                updateAPIUsage(data.api_usage);
+            }
+        }
+
+        // Update overview metrics
+        function updateOverviewMetrics(state) {
+            document.getElementById('overview-cpu').textContent = Math.round(state.cpu_percent) + '%';
+            document.getElementById('overview-memory').textContent = Math.round(state.memory_percent) + '%';
+            document.getElementById('overview-disk').textContent = Math.round(state.disk_percent || 0) + '%';
+            document.getElementById('overview-network').textContent = state.network_io || 0;
+
+            // Update progress bars
+            document.getElementById('cpu-progress').style.width = state.cpu_percent + '%';
+            document.getElementById('memory-progress').style.width = state.memory_percent + '%';
+            document.getElementById('disk-progress').style.width = (state.disk_percent || 0) + '%';
+            document.getElementById('network-progress').style.width = Math.min((state.network_io || 0) / 1000 * 100, 100) + '%';
+        }
+
+        // Update containers display
+        function updateContainers(containers) {
+            const activeContainer = document.getElementById('active-containers');
+            const containersView = document.getElementById('containers-content');
+            
+            let html = '';
+            containers.forEach(container => {
+                const displayStatus = container.display_status || container.status;
+                const isHealing = displayStatus.includes('Steven is');
+                const statusClass = isHealing ? 'warning' : 
+                                  container.status === 'running' ? '' : 
+                                  container.status === 'exited' ? 'offline' : 'warning';
+                
+                html += `
+                    <div class="container-item ${isHealing ? 'healing' : ''}">
+                        <div class="item-info">
+                            <div class="item-name">${container.name}</div>
+                            <div class="item-status">${displayStatus}</div>
+                        </div>
+                        <div class="status-indicator ${statusClass}"></div>
+                    </div>
+                `;
+            });
+            
+            activeContainer.innerHTML = html || '<p style="color: var(--text-muted); font-size: 12px;">No active containers</p>';
+            containersView.innerHTML = html || '<p style="color: var(--text-muted);">No containers found</p>';
+        }
+
+        // Update MCP servers display
+        function updateMCPServers(servers) {
+            const activeServers = document.getElementById('active-servers');
+            const serversView = document.getElementById('mcp-servers-content');
+            
+            let html = '';
+            servers.forEach(server => {
+                const displayStatus = server.display_status || server.status;
+                const isHealing = displayStatus.includes('Steven is');
+                const statusClass = isHealing ? 'warning' : 
+                                  server.status === 'running' ? '' : 
+                                  server.status === 'stopped' ? 'offline' : 'warning';
+                
+                html += `
+                    <div class="server-item ${isHealing ? 'healing' : ''}">
+                        <div class="item-info">
+                            <div class="item-name">${server.name}</div>
+                            <div class="item-status">${displayStatus}</div>
+                        </div>
+                        <div class="status-indicator ${statusClass}"></div>
+                    </div>
+                `;
+            });
+            
+            activeServers.innerHTML = html || '<p style="color: var(--text-muted); font-size: 12px;">No active servers</p>';
+            serversView.innerHTML = html || '<p style="color: var(--text-muted);">No MCP servers found</p>';
+        }
+
+        // Add healing log entry
+        function addHealingLogEntry(action) {
+            const log = document.getElementById('healing-actions-log');
+            const logContainer = document.getElementById('healing-log');
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${action.type || 'info'}`;
+            entry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span>${action.message || action}</span>
+            `;
+            
+            // Add to both logs
+            [log, logContainer].forEach(container => {
+                if (container) {
+                    container.appendChild(entry.cloneNode(true));
+                    container.scrollTop = container.scrollHeight;
+                }
+            });
+        }
+
+        // Add evolution log entry
+        function addEvolutionLogEntry(evolution) {
+            const log = document.getElementById('evolution-log');
+            if (!log) return;
+            
+            const timestamp = new Date().toLocaleTimeString();
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${evolution.type || 'info'}`;
+            entry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span>${evolution.message || evolution}</span>
+            `;
+            
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Update analytics chart
+        function updateAnalyticsChart(state) {
+            if (!analyticsChart) return;
+            
+            const now = new Date().toLocaleTimeString();
+            
+            analyticsChart.data.labels.push(now);
+            analyticsChart.data.datasets[0].data.push(state.cpu_percent);
+            analyticsChart.data.datasets[1].data.push(state.memory_percent);
+            
+            // Keep only last 20 data points
+            if (analyticsChart.data.labels.length > 20) {
+                analyticsChart.data.labels.shift();
+                analyticsChart.data.datasets[0].data.shift();
+                analyticsChart.data.datasets[1].data.shift();
+            }
+            
+            analyticsChart.update();
+        }
+
+        // Send AI command
+        function sendAICommand() {
+            const input = document.getElementById('ai-command-input');
+            const command = input.value.trim();
+            
+            if (!command) return;
+            
+            // Add command to log
+            addHealingLogEntry({
+                type: 'info',
+                message: `Command sent: ${command}`
+            });
+            
+            // Send to backend
+            fetch('/api/ai-command', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ command: command })
+            })
+            .then(response => response.json())
+            .then(data => {
+                addHealingLogEntry({
+                    type: data.success ? 'success' : 'error',
+                    message: data.message || data.error || 'Command executed'
+                });
+            })
+            .catch(error => {
+                addHealingLogEntry({
+                    type: 'error',
+                    message: 'Failed to send command: ' + error.message
+                });
+            });
+            
+            input.value = '';
+        }
+
+        // Send quick command
+        function sendQuickCommand(command) {
+            document.getElementById('ai-command-input').value = command;
+            sendAICommand();
+        }
+
+        // Handle enter key in command input
+        document.addEventListener('keydown', function(event) {
+            if (event.target.id === 'ai-command-input' && event.key === 'Enter') {
+                sendAICommand();
+            }
+        });
+
+        // Update alerts display
+        function updateAlerts(alerts) {
+            const alertContainer = document.getElementById('alert-container');
+            
+            // Clear existing alerts
+            alertContainer.innerHTML = '';
+            
+            alerts.forEach(alert => {
+                const alertElement = document.createElement('div');
+                alertElement.className = `alert ${alert.type}`;
+                alertElement.innerHTML = `
+                    <div class="alert-title">${alert.title || 'Steven Alert'}</div>
+                    <div class="alert-message">${alert.message}</div>
+                    ${alert.fix_suggestion ? `<div class="alert-fix">Fix: ${alert.fix_suggestion}</div>` : ''}
+                `;
+                
+                alertContainer.appendChild(alertElement);
+                
+                // Auto-remove alert after 10 seconds if it's fixable
+                if (alert.auto_fixable) {
+                    setTimeout(() => {
+                        if (alertElement.parentNode) {
+                            alertElement.remove();
+                        }
+                    }, 10000);
+                }
+            });
+        }
+
+        // Format numbers with appropriate suffix
+        function formatNumber(num) {
+            if (num >= 1000000) {
+                return (num / 1000000).toFixed(1) + 'M';
+            } else if (num >= 1000) {
+                return (num / 1000).toFixed(1) + 'K';
+            }
+            return num.toString();
+        }
+
+        // Format currency
+        function formatCurrency(amount) {
+            return '$' + amount.toFixed(2);
+        }
+
+        // Update API usage widget
+        function updateAPIUsage(apiUsage) {
+            document.getElementById('api-usage-today').textContent = formatNumber(apiUsage.api_used_today);
+            document.getElementById('api-usage-month').textContent = formatNumber(apiUsage.api_used_month);
+            document.getElementById('api-cost-today').textContent = formatCurrency(apiUsage.cost_today || 0);
+            document.getElementById('api-cost-month').textContent = formatCurrency(apiUsage.cost_month || 0);
+            document.getElementById('api-avg-daily').textContent = formatNumber(apiUsage.average_daily_tokens);
+            document.getElementById('api-est-monthly').textContent = formatCurrency(apiUsage.estimated_monthly_cost || 0);
+        }
+
+        // Auto-refresh data every 5 seconds
+        setInterval(fetchInitialData, 5000);
+
+        // Add some initial log entries for demo
+        setTimeout(() => {
+            addHealingLogEntry({
+                type: 'success',
+                message: 'Steven AI agent initialized successfully'
+            });
+            addHealingLogEntry({
+                type: 'info',
+                message: 'Monitoring Docker containers and MCP servers'
+            });
+            addEvolutionLogEntry({
+                type: 'info',
+                message: 'AI evolution system online - learning from system patterns'
+            });
+            addEvolutionLogEntry({
+                type: 'success',
+                message: 'Performance optimization model updated'
+            });
+        }, 1000);
+    </script>
+</body>
+</html>

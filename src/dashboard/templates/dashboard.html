@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Systems Manager - Dashboard</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a2e 50%, #16213e 100%);
+            min-height: 100vh;
+            color: #ffffff;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header h1 {
+            font-size: 24px;
+            font-weight: 700;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid rgba(0, 255, 136, 0.4);
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+        
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #00ff88;
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .logout-btn {
+            padding: 8px 16px;
+            background: rgba(255, 69, 58, 0.2);
+            border: 1px solid rgba(255, 69, 58, 0.4);
+            border-radius: 8px;
+            color: #ff453a;
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .logout-btn:hover {
+            background: rgba(255, 69, 58, 0.3);
+        }
+        
+        .dashboard-grid {
+            padding: 30px;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+        }
+        
+        .card {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .card h2 {
+            font-size: 20px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .metric {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+        }
+        
+        .metric-label {
+            color: rgba(255, 255, 255, 0.8);
+            font-weight: 500;
+        }
+        
+        .metric-value {
+            font-weight: 700;
+            font-size: 16px;
+        }
+        
+        .metric-value.excellent { color: #00ff88; }
+        .metric-value.good { color: #00d4ff; }
+        .metric-value.warning { color: #ffbb00; }
+        .metric-value.critical { color: #ff453a; }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #00d4ff, #00ff88);
+            border-radius: 4px;
+            transition: width 0.5s ease;
+        }
+        
+        .action-button {
+            width: 100%;
+            padding: 12px;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .action-button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 5px 15px rgba(0, 212, 255, 0.4);
+        }
+        
+        .action-button.danger {
+            background: linear-gradient(45deg, #ff453a, #ff6b6b);
+        }
+        
+        .evolution-counter {
+            font-size: 48px;
+            font-weight: 800;
+            text-align: center;
+            background: linear-gradient(45deg, #00d4ff, #00ff88);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 20px 0;
+        }
+        
+        .log-entry {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            font-size: 14px;
+            border-left: 3px solid #00d4ff;
+        }
+        
+        .log-timestamp {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 12px;
+        }
+        
+        .command-input {
+            width: 100%;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            color: white;
+            font-family: 'SF Mono', Monaco, monospace;
+            margin-bottom: 10px;
+        }
+        
+        .command-input:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background: rgba(255, 255, 255, 0.12);
+        }
+        
+        .server-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+        
+        .server-item {
+            text-align: center;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .server-name {
+            font-size: 12px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 5px;
+        }
+        
+        .server-status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin: 0 auto;
+        }
+        
+        .server-status-indicator.healthy { background: #00ff88; }
+        .server-status-indicator.unhealthy { background: #ffbb00; }
+        .server-status-indicator.down { background: #ff453a; }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .chart-container {
+            width: 100%;
+            height: 300px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🤖 AI Systems Manager</h1>
+        <div class="header-info">
+            <div class="status-indicator">
+                <div class="status-dot"></div>
+                <span id="connection-status">Connected</span>
+            </div>
+            <a href="/logout" class="logout-btn">Logout</a>
+        </div>
+    </div>
+    
+    <div class="dashboard-grid">
+        <!-- System Health Card -->
+        <div class="card">
+            <h2>🏥 System Health</h2>
+            <div class="metric">
+                <span class="metric-label">Overall Health</span>
+                <span id="system-health" class="metric-value excellent">Excellent</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Performance Score</span>
+                <span id="performance-score" class="metric-value excellent">95/100</span>
+            </div>
+            <div class="progress-bar">
+                <div id="performance-progress" class="progress-fill" style="width: 95%"></div>
+            </div>
+        </div>
+        
+        <!-- System Resources Card -->
+        <div class="card">
+            <h2>💻 System Resources</h2>
+            <div class="metric">
+                <span class="metric-label">CPU Usage</span>
+                <span id="cpu-usage" class="metric-value good">25%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Memory Usage</span>
+                <span id="memory-usage" class="metric-value good">45%</span>
+            </div>
+            <div class="metric">
+                <span class="metric-label">Disk Usage</span>
+                <span id="disk-usage" class="metric-value excellent">65%</span>
+            </div>
+        </div>
+        
+        <!-- AI Evolution Card -->
+        <div class="card">
+            <h2>🧬 AI Evolution</h2>
+            <div class="evolution-counter" id="evolution-counter">0</div>
+            <p style="text-align: center; color: rgba(255, 255, 255, 0.7); margin-bottom: 20px;">Autonomous Evolution Cycles</p>
+            <button class="action-button" onclick="forceEvolution()">Force Evolution</button>
+            <div class="metric">
+                <span class="metric-label">Last Evolution</span>
+                <span id="last-evolution" class="metric-value">Never</span>
+            </div>
+        </div>
+        
+        <!-- MCP Servers Card -->
+        <div class="card">
+            <h2>🔌 MCP Servers</h2>
+            <div id="mcp-servers" class="server-status">
+                <!-- MCP servers will be populated here -->
+            </div>
+        </div>
+        
+        <!-- Docker Containers Card -->
+        <div class="card">
+            <h2>🐳 Docker Containers</h2>
+            <div id="docker-containers">
+                <!-- Docker containers will be populated here -->
+            </div>
+        </div>
+        
+        <!-- Admin Controls Card -->
+        <div class="card">
+            <h2>⚡ Admin Controls</h2>
+            <input type="text" id="command-input" class="command-input" placeholder="Enter system command...">
+            <button class="action-button" onclick="executeCommand()">Execute Command</button>
+            <button class="action-button danger" onclick="emergencyStop()">Emergency Stop</button>
+        </div>
+        
+        <!-- Recent Actions Card -->
+        <div class="card full-width">
+            <h2>📋 Recent Healing Actions</h2>
+            <div id="recent-actions">
+                <!-- Recent actions will be populated here -->
+            </div>
+        </div>
+        
+        <!-- Performance Chart Card -->
+        <div class="card full-width">
+            <h2>📈 Performance History</h2>
+            <div class="chart-container">
+                <canvas id="performance-chart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize Socket.IO connection
+        const socket = io();
+        
+        // Performance chart
+        const ctx = document.getElementById('performance-chart').getContext('2d');
+        const performanceData = {
+            labels: [],
+            datasets: [{
+                label: 'Performance Score',
+                data: [],
+                borderColor: '#00d4ff',
+                backgroundColor: 'rgba(0, 212, 255, 0.1)',
+                tension: 0.4
+            }]
+        };
+        
+        const chart = new Chart(ctx, {
+            type: 'line',
+            data: performanceData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        labels: { color: 'white' }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' }
+                    },
+                    y: {
+                        ticks: { color: 'rgba(255, 255, 255, 0.7)' },
+                        grid: { color: 'rgba(255, 255, 255, 0.1)' },
+                        min: 0,
+                        max: 100
+                    }
+                }
+            }
+        });
+        
+        // Socket event handlers
+        socket.on('connect', function() {
+            document.getElementById('connection-status').textContent = 'Connected';
+        });
+        
+        socket.on('disconnect', function() {
+            document.getElementById('connection-status').textContent = 'Disconnected';
+        });
+        
+        socket.on('status_update', function(data) {
+            updateDashboard(data);
+        });
+        
+        function updateDashboard(data) {
+            if (data.error) {
+                console.error('Dashboard error:', data.error);
+                return;
+            }
+            
+            const state = data.current_state;
+            
+            // Update system health
+            document.getElementById('system-health').textContent = state.system_health || 'Unknown';
+            document.getElementById('system-health').className = 'metric-value ' + getHealthClass(state.system_health);
+            
+            // Update performance score
+            const score = Math.round(state.performance_score || 0);
+            document.getElementById('performance-score').textContent = score + '/100';
+            document.getElementById('performance-score').className = 'metric-value ' + getScoreClass(score);
+            document.getElementById('performance-progress').style.width = score + '%';
+            
+            // Update resources
+            document.getElementById('cpu-usage').textContent = Math.round(state.cpu_percent || 0) + '%';
+            document.getElementById('memory-usage').textContent = Math.round(state.memory_percent || 0) + '%';
+            document.getElementById('disk-usage').textContent = Math.round(state.disk_percent || 0) + '%';
+            
+            // Update evolution counter
+            document.getElementById('evolution-counter').textContent = data.evolution_counter || 0;
+            
+            // Update MCP servers
+            updateMCPServers(state.mcp_servers || []);
+            
+            // Update Docker containers
+            updateDockerContainers(state.docker_containers || []);
+            
+            // Update recent actions
+            updateRecentActions(data.recent_actions || []);
+            
+            // Update performance chart
+            updatePerformanceChart(score);
+        }
+        
+        function updateMCPServers(servers) {
+            const container = document.getElementById('mcp-servers');
+            container.innerHTML = '';
+            
+            servers.forEach(server => {
+                const serverDiv = document.createElement('div');
+                serverDiv.className = 'server-item';
+                serverDiv.innerHTML = `
+                    <div class="server-name">${server.name}</div>
+                    <div class="server-status-indicator ${server.status}"></div>
+                `;
+                container.appendChild(serverDiv);
+            });
+        }
+        
+        function updateDockerContainers(containers) {
+            const container = document.getElementById('docker-containers');
+            container.innerHTML = '';
+            
+            containers.forEach(cont => {
+                const contDiv = document.createElement('div');
+                contDiv.className = 'metric';
+                contDiv.innerHTML = `
+                    <span class="metric-label">${cont.name}</span>
+                    <span class="metric-value ${getStatusClass(cont.status)}">${cont.status}</span>
+                `;
+                container.appendChild(contDiv);
+            });
+        }
+        
+        function updateRecentActions(actions) {
+            const container = document.getElementById('recent-actions');
+            container.innerHTML = '';
+            
+            actions.slice(0, 5).forEach(action => {
+                const actionDiv = document.createElement('div');
+                actionDiv.className = 'log-entry';
+                const timestamp = new Date(action.timestamp * 1000).toLocaleString();
+                actionDiv.innerHTML = `
+                    <div><strong>${action.action_type}</strong> on ${action.target}</div>
+                    <div class="log-timestamp">${timestamp}</div>
+                `;
+                container.appendChild(actionDiv);
+            });
+        }
+        
+        function updatePerformanceChart(score) {
+            const now = new Date().toLocaleTimeString();
+            performanceData.labels.push(now);
+            performanceData.datasets[0].data.push(score);
+            
+            // Keep only last 20 data points
+            if (performanceData.labels.length > 20) {
+                performanceData.labels.shift();
+                performanceData.datasets[0].data.shift();
+            }
+            
+            chart.update();
+        }
+        
+        function getHealthClass(health) {
+            switch(health) {
+                case 'excellent': return 'excellent';
+                case 'good': return 'good';
+                case 'fair': return 'warning';
+                case 'critical': return 'critical';
+                default: return 'good';
+            }
+        }
+        
+        function getScoreClass(score) {
+            if (score >= 90) return 'excellent';
+            if (score >= 75) return 'good';
+            if (score >= 50) return 'warning';
+            return 'critical';
+        }
+        
+        function getStatusClass(status) {
+            switch(status) {
+                case 'running': return 'excellent';
+                case 'healthy': return 'excellent';
+                case 'exited': return 'warning';
+                case 'down': return 'critical';
+                default: return 'good';
+            }
+        }
+        
+        // Action functions
+        function forceEvolution() {
+            fetch('/api/force-evolution', { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('Evolution forced successfully!');
+                    } else {
+                        alert('Evolution failed: ' + data.error);
+                    }
+                });
+        }
+        
+        function executeCommand() {
+            const command = document.getElementById('command-input').value;
+            if (!command) return;
+            
+            if (confirm(`Execute command: ${command}?`)) {
+                fetch('/api/healing-action', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: command })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    alert(`Command executed. Success: ${data.success}\nOutput: ${data.stdout || data.stderr}`);
+                    document.getElementById('command-input').value = '';
+                });
+            }
+        }
+        
+        function emergencyStop() {
+            if (confirm('Emergency stop will halt the AI system. Are you sure?')) {
+                executeCommand('pkill -f meta_agent');
+            }
+        }
+        
+        // Initialize dashboard
+        fetch('/api/status')
+            .then(response => response.json())
+            .then(data => updateDashboard(data));
+        
+        // Refresh dashboard every 30 seconds
+        setInterval(() => {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => updateDashboard(data));
+        }, 30000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,94 @@
+# AI Systems Manager - Docker Compose Configuration
+# Bulletproof deployment for minicloud server
+
+version: '3.8'
+
+services:
+  # Meta Network AI Agent - Core System
+  meta-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile.meta-agent
+    container_name: ai-systems-meta-agent
+    restart: always
+    privileged: true
+    network_mode: host
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /Users/daniel/ai-systems-manager:/app
+      - /tmp:/tmp
+      - /var/log:/var/log
+    environment:
+      - PYTHONPATH=/app/src
+      - ADMIN_USER=daniel
+      - ADMIN_PASSWORD=werds
+      - MINICLOUD_IP=192.168.2.2
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+    ports:
+      - "5001:5001"  # Dashboard
+      - "8888:8888"  # API
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "3"
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import requests; requests.get('http://localhost:5001')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # Dashboard Web Interface
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    container_name: ai-systems-dashboard
+    restart: always
+    depends_on:
+      - meta-agent
+    volumes:
+      - /Users/daniel/ai-systems-manager:/app
+    environment:
+      - PYTHONPATH=/app/src
+    ports:
+      - "5001:5001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # System Monitor (Prometheus-style metrics)
+  system-monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.monitor
+    container_name: ai-systems-monitor
+    restart: always
+    privileged: true
+    network_mode: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    environment:
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ROOT=/rootfs
+    ports:
+      - "9090:9090"
+
+networks:
+  ai-systems-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  ai-systems-data:
+    driver: local
+  ai-systems-logs:
+    driver: local
