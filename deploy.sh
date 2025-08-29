@@ -5,9 +5,8 @@
 set -e
 
 MINICLOUD_IP="192.168.2.2"
-ADMIN_USER="daniel"
-ADMIN_PASSWORD="werds"
-SSH_KEY="/Users/daniel/.ssh/minicloud_key"
+ADMIN_USER=${ADMIN_USER:-daniel}
+SSH_KEY=${SSH_KEY:-$HOME/.ssh/id_rsa}
 
 echo "🚀 DEPLOYING AI SYSTEMS MANAGER TO MINICLOUD"
 echo "📡 Target: $MINICLOUD_IP"
@@ -108,7 +107,7 @@ EOF
     
     echo '✅ AI Systems Manager deployed and started!'
     echo '📊 Dashboard: http://$MINICLOUD_IP:5001'
-    echo '🔐 Login: $ADMIN_USER / $ADMIN_PASSWORD'
+    echo '🔐 Ensure ADMIN_PASSWORD_HASH is configured in .env on target'
 "
 
 echo ""

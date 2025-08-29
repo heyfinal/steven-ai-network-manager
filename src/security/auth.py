@@ -53,7 +53,9 @@ class SecurityManager:
         logger.setLevel(logging.INFO)
         
         # Secure log handler
-        log_path = Path.cwd() / 'logs' / 'security.log'
+        logs_dir = Path.cwd() / 'logs'
+        logs_dir.mkdir(parents=True, exist_ok=True)
+        log_path = logs_dir / 'security.log'
         handler = logging.FileHandler(log_path)
         formatter = logging.Formatter(
             '%(asctime)s - SECURITY - %(levelname)s - %(message)s'

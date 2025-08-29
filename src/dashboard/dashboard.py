@@ -3,10 +3,10 @@
 AI Systems Manager - Professional Admin Dashboard
 Bulletproof web interface for monitoring and controlling the Meta Network Agent
 
-Admin Credentials: daniel/werds (HARDCODED)
+Admin Dashboard (secured)
 """
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from flask_socketio import SocketIO, emit
+from flask_socketio import SocketIO, emit, disconnect
 import json
 import time
 import threading
@@ -19,24 +19,46 @@ import sys
 # Add core module to path
 sys.path.append(str(Path(__file__).parent.parent / "core"))
 
+# Prefer secure agent; fall back only if necessary
 try:
-    from secure_meta_agent import SecureMetaNetworkAgent, ADMIN_USER
-    ADMIN_PASSWORD = "werds"  # Hardcoded as per requirements
-    
+    from secure_meta_agent import SecureMetaNetworkAgent, ADMIN_USER  # noqa: F401
+
     _agent_instance = None
+
     def get_meta_agent():
         global _agent_instance
         if _agent_instance is None:
             _agent_instance = SecureMetaNetworkAgent()
         return _agent_instance
-        
-except ImportError:
-    from meta_agent import get_meta_agent, ADMIN_USER, ADMIN_PASSWORD
+except Exception:
+    # Fallback to legacy agent (not recommended)
+    from meta_agent import get_meta_agent, ADMIN_USER  # type: ignore
 
+
+from security.auth import SecurityManager
+import bcrypt
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
-app.secret_key = hashlib.sha256(f"{ADMIN_USER}{ADMIN_PASSWORD}".encode()).hexdigest()
-socketio = SocketIO(app, cors_allowed_origins="*")
+
+# Secret keys and session security
+SESSION_SECRET = os.getenv('SESSION_SECRET_KEY')
+if SESSION_SECRET:
+    app.secret_key = SESSION_SECRET
+else:
+    # Fallback for dev only
+    app.secret_key = hashlib.sha256(os.urandom(32)).hexdigest()
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=bool(os.getenv('REQUIRE_HTTPS', 'false').lower() == 'true')
+)
+
+allowed_origins_env = os.getenv('ALLOWED_ORIGINS')
+allowed_origins = [o.strip() for o in allowed_origins_env.split(',')] if allowed_origins_env else None
+socketio = SocketIO(app, cors_allowed_origins=allowed_origins)
+
+security_manager = SecurityManager()
 
 
 @app.route('/')
@@ -54,8 +76,9 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '')
         password = request.form.get('password', '')
-        
-        if username == ADMIN_USER and password == ADMIN_PASSWORD:
+
+        auth_result = security_manager.authenticate_user(username, password)
+        if auth_result.get('success'):
             session['authenticated'] = True
             session['user'] = username
             return redirect(url_for('dashboard'))
@@ -113,16 +136,12 @@ def execute_healing_action():
         if not command:
             return jsonify({'error': 'No command provided'}), 400
         
-        # Execute the command (admin has full power)
-        import subprocess
-        result = subprocess.run(command, shell=True, capture_output=True, text=True, timeout=30)
-        
-        return jsonify({
-            'success': result.returncode == 0,
-            'stdout': result.stdout,
-            'stderr': result.stderr,
-            'returncode': result.returncode
-        })
+        # Route through secure agent command validation if available
+        agent = get_meta_agent()
+        if hasattr(agent, 'validate_and_execute_command'):
+            res = agent.validate_and_execute_command(command, risk_tolerance=os.getenv('RISK_TOLERANCE', 'low'))
+            return jsonify(res), (200 if res.get('success') else 400)
+        return jsonify({'error': 'Secure execution not available'}), 403
         
     except Exception as e:
         return jsonify({'error': str(e)}), 500
@@ -161,11 +180,12 @@ def execute_ai_command():
             # For other commands, use AI to interpret and execute
             try:
                 # Use OpenAI to process the command
-                import openai
+                from openai import OpenAI
                 import time
                 start_time = time.time()
                 
-                response = openai.chat.completions.create(
+                client = OpenAI()
+                response = client.chat.completions.create(
                     model="gpt-4",
                     messages=[
                         {"role": "system", "content": "You are Steven, an AI network managing agent. Interpret user commands and provide appropriate system responses."},
@@ -252,6 +272,8 @@ def handle_connect():
     """Handle WebSocket connection"""
     if is_authenticated():
         emit('connected', {'message': 'Connected to AI Systems Manager'})
+    else:
+        disconnect()
 
 
 if __name__ == '__main__':

@@ -5,8 +5,8 @@
 set -e
 
 MINICLOUD_IP="192.168.2.2"
-ADMIN_USER="daniel"
-SSH_KEY="/Users/daniel/.ssh/minicloud_key"
+ADMIN_USER=${ADMIN_USER:-daniel}
+SSH_KEY=${SSH_KEY:-$HOME/.ssh/id_rsa}
 
 echo "🔐 DEPLOYING SECURE AI SYSTEMS MANAGER TO MINICLOUD"
 echo "📡 Target: $MINICLOUD_IP"

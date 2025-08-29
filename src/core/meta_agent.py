@@ -85,7 +85,10 @@ class MetaNetworkAgent:
     def __init__(self):
         """Initialize the Meta Network Agent with full capabilities"""
         self.logger = self._setup_logger()
-        self.db_path = Path("/Users/daniel/ai-systems-manager/meta_agent.db")
+        base_dir = Path(__file__).resolve().parents[2]
+        data_dir = base_dir / "data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        self.db_path = data_dir / "meta_agent.db"
         self.docker_client = None
         self.system_state_history = []
         self.learning_models = {}
@@ -130,8 +133,9 @@ class MetaNetworkAgent:
         logger.setLevel(logging.INFO)
         
         # Create logs directory if it doesn't exist
-        log_dir = Path("/Users/daniel/ai-systems-manager/logs")
-        log_dir.mkdir(exist_ok=True)
+        base_dir = Path(__file__).resolve().parents[2]
+        log_dir = base_dir / "logs"
+        log_dir.mkdir(parents=True, exist_ok=True)
         
         # File handler for persistent logging
         file_handler = logging.FileHandler(log_dir / "meta_agent.log")
@@ -217,30 +221,8 @@ class MetaNetworkAgent:
             self._auto_install_docker()
     
     def _auto_install_docker(self):
-        """Automatically install Docker if not available"""
-        self.logger.info("🔧 Auto-installing Docker...")
-        try:
-            # For macOS
-            if sys.platform == "darwin":
-                subprocess.run([
-                    "curl", "-fsSL", 
-                    "https://get.docker.com", 
-                    "|", "sh"
-                ], check=True, shell=True)
-            
-            # Restart Docker service
-            subprocess.run(["sudo", "systemctl", "start", "docker"], check=False)
-            
-            # Retry connection
-            time.sleep(10)
-            self.docker_client = docker.from_env()
-            self.docker_client.ping()
-            
-            self.logger.info("✅ Docker auto-installed successfully")
-            
-        except Exception as e:
-            self.logger.error(f"❌ Docker auto-installation failed: {e}")
-            # This is not critical - we can still manage MCP servers
+        """Do not auto-install Docker; log and continue."""
+        self.logger.warning("⚠️  Docker not available and auto-install is disabled. Skipping Docker features.")
     
     def _autonomous_main_loop(self):
         """Main autonomous loop - runs continuously"""
@@ -662,6 +644,7 @@ class MetaNetworkAgent:
         """Log healing action to database"""
         try:
             conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             
             cursor.execute('''
