@@ -217,48 +217,70 @@ def execute_ai_command():
         else:
             # For other commands, use AI to interpret and execute
             try:
-                # Use OpenAI to process the command
-                import openai
-                import time
-                start_time = time.time()
-                
-                response = openai.chat.completions.create(
-                    model="gpt-4",
-                    messages=[
-                        {"role": "system", "content": "You are Steven, an AI network managing agent. Interpret user commands and provide appropriate system responses."},
-                        {"role": "user", "content": f"Execute this command: {command}"}
-                    ],
-                    max_tokens=150
-                )
-                
-                # Track API usage
-                response_time_ms = int((time.time() - start_time) * 1000)
-                tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else 150
-                cost_usd = tokens_used * 0.00003  # Approximate GPT-4 cost per token
-                
-                agent._track_api_usage(
-                    endpoint="chat/completions",
-                    model="gpt-4", 
-                    tokens_used=tokens_used,
-                    cost_usd=cost_usd,
-                    operation_type="command_interpretation",
-                    success=True,
-                    response_time_ms=response_time_ms
-                )
-                
-                message = response.choices[0].message.content
-                result = True
+                # Check if we have the secure meta agent with OpenAI support
+                if hasattr(agent, 'validate_and_execute_command'):
+                    # Use secure agent for advanced command processing
+                    ai_result = agent.validate_and_execute_command(f"interpret: {command}")
+                    message = ai_result.get('stdout', f"Steven processed: {command}")
+                    result = ai_result.get('success', True)
+                else:
+                    # Check if OpenAI is available
+                    openai_key = os.getenv('OPENAI_API_KEY')
+                    if not openai_key or openai_key in ['test_placeholder_key', 'your_openai_api_key_here']:
+                        # Fallback without OpenAI
+                        message = f"Steven is processing: {command} (offline mode)"
+                        result = True
+                    else:
+                        # Use OpenAI to process the command
+                        import openai
+                        import time
+                        start_time = time.time()
+                        
+                        # Set the API key for this request
+                        openai.api_key = openai_key
+                        
+                        response = openai.chat.completions.create(
+                            model="gpt-4",
+                            messages=[
+                                {"role": "system", "content": "You are Steven, an AI network managing agent. Interpret user commands and provide appropriate system responses."},
+                                {"role": "user", "content": f"Execute this command: {command}"}
+                            ],
+                            max_tokens=150
+                        )
+                        
+                        # Track API usage if the agent supports it
+                        if hasattr(agent, '_track_api_usage'):
+                            response_time_ms = int((time.time() - start_time) * 1000)
+                            tokens_used = response.usage.total_tokens if hasattr(response, 'usage') else 150
+                            cost_usd = tokens_used * 0.00003  # Approximate GPT-4 cost per token
+                            
+                            agent._track_api_usage(
+                                endpoint="chat/completions",
+                                model="gpt-4", 
+                                tokens_used=tokens_used,
+                                cost_usd=cost_usd,
+                                operation_type="command_interpretation",
+                                success=True,
+                                response_time_ms=response_time_ms
+                            )
+                        
+                        message = response.choices[0].message.content
+                        result = True
+                        
             except Exception as ai_error:
-                # Track failed API call
-                agent._track_api_usage(
-                    endpoint="chat/completions",
-                    model="gpt-4",
-                    tokens_used=0,
-                    cost_usd=0.0,
-                    operation_type="command_interpretation",
-                    success=False
-                )
-                message = f"Steven is processing: {command}"
+                # Track failed API call if supported
+                if hasattr(agent, '_track_api_usage'):
+                    agent._track_api_usage(
+                        endpoint="chat/completions",
+                        model="gpt-4",
+                        tokens_used=0,
+                        cost_usd=0.0,
+                        operation_type="command_interpretation",
+                        success=False
+                    )
+                
+                # Graceful fallback
+                message = f"Steven is processing: {command} (error: {str(ai_error)[:50]}...)"
                 result = True
         
         # Broadcast the action to all connected clients
