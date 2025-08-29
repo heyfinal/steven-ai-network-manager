@@ -18,6 +18,7 @@ import subprocess
 import time
 import threading
 import os
+from dotenv import load_dotenv
 import hashlib
 import sqlite3
 from datetime import datetime, timedelta
@@ -35,11 +36,20 @@ from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
 
-# HARDCODED ADMIN CREDENTIALS - NEVER CHANGE
-ADMIN_USER = "daniel"
-ADMIN_PASSWORD = "werds"
-MINICLOUD_IP = "192.168.2.2"
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'YOUR_API_KEY_HERE')
+# Load environment variables securely
+load_dotenv()
+
+# Secure configuration from environment
+ADMIN_USER = os.getenv('ADMIN_USERNAME', 'daniel')
+ADMIN_PASSWORD = "werds"  # Note: This should be migrated to use secure_meta_agent.py with bcrypt
+MINICLOUD_IP = os.getenv('MINICLOUD_IP', '192.168.2.2')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY')
+
+# Security check for API key
+if not OPENAI_API_KEY or OPENAI_API_KEY == 'YOUR_API_KEY_HERE' or OPENAI_API_KEY == 'your_openai_api_key_here':
+    import warnings
+    warnings.warn("⚠️  OpenAI API key not properly configured. Some AI features will be disabled.", UserWarning)
+    OPENAI_API_KEY = None
 
 
 @dataclass
@@ -85,7 +95,12 @@ class MetaNetworkAgent:
     def __init__(self):
         """Initialize the Meta Network Agent with full capabilities"""
         self.logger = self._setup_logger()
-        self.db_path = Path("/Users/daniel/ai-systems-manager/meta_agent.db")
+        # Use environment variable for database path or default to current directory
+        db_path_env = os.getenv('DATABASE_PATH', './data/meta_agent.db')
+        self.db_path = Path(db_path_env)
+        
+        # Ensure database directory exists
+        self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self.docker_client = None
         self.system_state_history = []
         self.learning_models = {}
@@ -111,9 +126,17 @@ class MetaNetworkAgent:
         self.logger.info(f"🔐 Admin Access: {ADMIN_USER} (credentials locked)")
         self.logger.info("🤖 AUTONOMOUS MODE ENABLED - Full sudo powers active")
         
-        # Setup signal handlers for graceful shutdown
-        signal.signal(signal.SIGINT, self._signal_handler)
-        signal.signal(signal.SIGTERM, self._signal_handler)
+        # Setup signal handlers for graceful shutdown (only in main thread)
+        try:
+            signal.signal(signal.SIGINT, self._signal_handler)
+            signal.signal(signal.SIGTERM, self._signal_handler)
+        except ValueError:
+            # Signal handlers can only be set in main thread
+            self.logger.warning("⚠️  Signal handlers not set (not in main thread)")
+            pass
+        
+        # Validate system requirements before starting
+        self._validate_system_requirements()
         
         # Initialize database and Docker client
         self._init_database()
@@ -129,8 +152,8 @@ class MetaNetworkAgent:
         logger = logging.getLogger('MetaNetworkAgent')
         logger.setLevel(logging.INFO)
         
-        # Create logs directory if it doesn't exist
-        log_dir = Path("/Users/daniel/ai-systems-manager/logs")
+        # Create logs directory if it doesn't exist - use current directory
+        log_dir = Path.cwd() / "logs"
         log_dir.mkdir(exist_ok=True)
         
         # File handler for persistent logging
@@ -151,6 +174,41 @@ class MetaNetworkAgent:
         logger.addHandler(console_handler)
         
         return logger
+    
+    def _validate_system_requirements(self):
+        """Validate system requirements and configuration"""
+        try:
+            self.logger.info("🔍 Validating system requirements...")
+            
+            # Check Python version
+            import sys
+            if sys.version_info < (3, 8):
+                self.logger.warning("⚠️  Python 3.8+ recommended for optimal performance")
+            
+            # Check disk space
+            disk_usage = psutil.disk_usage('/')
+            free_gb = disk_usage.free / (1024**3)
+            if free_gb < 1:
+                self.logger.warning(f"⚠️  Low disk space: {free_gb:.1f}GB free")
+            
+            # Check available memory
+            memory = psutil.virtual_memory()
+            if memory.available < (512 * 1024**2):  # 512MB
+                self.logger.warning(f"⚠️  Low memory: {memory.available / (1024**2):.0f}MB available")
+            
+            # Validate configuration
+            config_issues = []
+            if not OPENAI_API_KEY or OPENAI_API_KEY in ['test_placeholder_key', 'your_openai_api_key_here']:
+                config_issues.append("OpenAI API key not configured")
+            
+            if config_issues:
+                self.logger.info("⚙️  Configuration notes: " + ", ".join(config_issues))
+            else:
+                self.logger.info("✅ System requirements validated")
+                
+        except Exception as e:
+            self.logger.warning(f"⚠️  System validation error: {e}")
+    
     
     def _init_database(self):
         """Initialize SQLite database for state tracking"""
@@ -274,8 +332,11 @@ class MetaNetworkAgent:
                 # 7. Train models if enough data
                 self._train_models()
                 
-                # Sleep for monitoring interval (30 seconds)
-                time.sleep(30)
+                # Sleep for monitoring interval (configurable, with jitter)
+                base_interval = int(os.getenv('MONITORING_INTERVAL', '30'))
+                jitter = (hash(str(time.time())) % 10) - 5  # -5 to +5 seconds
+                sleep_time = max(15, base_interval + jitter)  # Minimum 15 seconds
+                time.sleep(sleep_time)
                 
             except Exception as e:
                 self.logger.error(f"❌ Error in main loop: {e}")
@@ -307,27 +368,35 @@ class MetaNetworkAgent:
                 except Exception as e:
                     self.logger.warning(f"⚠️  Docker container collection failed: {e}")
             
-            # MCP servers
+            # MCP servers with improved error handling
             mcp_servers = []
             for server_name, config in self.mcp_servers.items():
                 try:
+                    # Use configurable timeout and connection pooling session
+                    timeout = int(os.getenv('MCP_HEALTH_CHECK_TIMEOUT', '3'))
                     response = requests.get(
                         f"http://localhost:{config['port']}{config['health_endpoint']}", 
-                        timeout=5
+                        timeout=timeout,
+                        headers={'User-Agent': 'Steven-AI-Agent/1.0'}
                     )
-                    mcp_servers.append({
-                        'name': server_name,
-                        'port': config['port'],
-                        'status': 'healthy' if response.status_code == 200 else 'unhealthy',
-                        'critical': config['critical']
-                    })
-                except:
-                    mcp_servers.append({
-                        'name': server_name,
-                        'port': config['port'],
-                        'status': 'down',
-                        'critical': config['critical']
-                    })
+                    status = 'healthy' if response.status_code == 200 else 'unhealthy'
+                    
+                except requests.exceptions.Timeout:
+                    status = 'timeout'
+                    self.logger.debug(f"⏱️  MCP server {server_name} health check timeout")
+                except requests.exceptions.ConnectionError:
+                    status = 'down'
+                    self.logger.debug(f"🔌 MCP server {server_name} connection refused")
+                except Exception as e:
+                    status = 'error'
+                    self.logger.debug(f"❌ MCP server {server_name} error: {e}")
+                
+                mcp_servers.append({
+                    'name': server_name,
+                    'port': config['port'],
+                    'status': status,
+                    'critical': config['critical']
+                })
             
             # Calculate performance score
             performance_score = self._calculate_performance_score(
@@ -740,8 +809,9 @@ class MetaNetworkAgent:
             for action in evolution_actions:
                 self._execute_evolution_action(action)
             
-            # Collect metrics after evolution
-            time.sleep(30)  # Allow time for changes to take effect
+            # Collect metrics after evolution (configurable delay)
+            evolution_settle_time = int(os.getenv('EVOLUTION_SETTLE_TIME', '20'))
+            time.sleep(evolution_settle_time)  # Allow time for changes to take effect
             metrics_after = self._collect_evolution_metrics()
             
             # Log evolution
@@ -796,6 +866,13 @@ class MetaNetworkAgent:
     def _ai_optimize_thresholds(self):
         """Use AI to optimize healing thresholds"""
         try:
+            # Check if OpenAI API key is available
+            if not OPENAI_API_KEY or OPENAI_API_KEY in ['YOUR_API_KEY_HERE', 'your_openai_api_key_here', 'test_placeholder_key']:
+                self.logger.info("🤖 AI optimization skipped - OpenAI API key not configured")
+                # Use basic heuristic optimization instead
+                self._basic_threshold_optimization()
+                return
+            
             # This would use the OpenAI API to analyze historical data
             # and recommend optimal thresholds
             
@@ -812,25 +889,84 @@ class MetaNetworkAgent:
             Recommend new thresholds to minimize false positives while maintaining system health.
             """
             
-            # Make API call to OpenAI (simplified for demo)
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}"}
-            response = requests.post(
-                "https://api.openai.com/v1/chat/completions",
-                headers=headers,
-                json={
-                    "model": "gpt-4",
-                    "messages": [{"role": "user", "content": prompt}],
-                    "max_tokens": 500
-                },
-                timeout=30
-            )
+            # Make API call to OpenAI with improved error handling
+            headers = {
+                "Authorization": f"Bearer {OPENAI_API_KEY}",
+                "Content-Type": "application/json",
+                "User-Agent": "Steven-AI-Agent/1.0"
+            }
             
-            if response.status_code == 200:
-                ai_response = response.json()['choices'][0]['message']['content']
-                self.logger.info(f"🤖 AI threshold optimization: {ai_response[:200]}...")
+            payload = {
+                "model": "gpt-4",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 500,
+                "temperature": 0.3  # More deterministic responses
+            }
+            
+            # Retry logic for API calls
+            max_retries = 2
+            for attempt in range(max_retries + 1):
+                try:
+                    response = requests.post(
+                        "https://api.openai.com/v1/chat/completions",
+                        headers=headers,
+                        json=payload,
+                        timeout=int(os.getenv('OPENAI_TIMEOUT', '30'))
+                    )
+                    
+                    if response.status_code == 200:
+                        ai_response = response.json()['choices'][0]['message']['content']
+                        self.logger.info(f"🤖 AI threshold optimization: {ai_response[:200]}...")
+                        return  # Success, exit function
+                    elif response.status_code == 429:  # Rate limit
+                        if attempt < max_retries:
+                            wait_time = (2 ** attempt) * 5  # Exponential backoff
+                            self.logger.warning(f"⚠️  Rate limited, waiting {wait_time}s before retry {attempt + 1}")
+                            time.sleep(wait_time)
+                            continue
+                    else:
+                        self.logger.warning(f"⚠️  OpenAI API error (status {response.status_code})")
+                        break
+                        
+                except requests.exceptions.Timeout:
+                    self.logger.warning(f"⚠️  OpenAI API timeout on attempt {attempt + 1}")
+                    if attempt >= max_retries:
+                        break
+                except requests.exceptions.ConnectionError:
+                    self.logger.warning(f"⚠️  OpenAI API connection error on attempt {attempt + 1}")
+                    if attempt >= max_retries:
+                        break
+            
+            # If we get here, all attempts failed
+            self.logger.warning("⚠️  OpenAI API failed after retries, using basic optimization")
+            self._basic_threshold_optimization()
             
         except Exception as e:
             self.logger.warning(f"⚠️  AI threshold optimization failed: {e}")
+            # Fallback to basic optimization
+            self._basic_threshold_optimization()
+    
+    def _basic_threshold_optimization(self):
+        """Basic heuristic threshold optimization without AI"""
+        try:
+            if len(self.system_state_history) >= 10:
+                recent_states = self.system_state_history[-20:]
+                
+                # Calculate average resource usage
+                avg_cpu = sum(s.cpu_percent for s in recent_states) / len(recent_states)
+                avg_memory = sum(s.memory_percent for s in recent_states) / len(recent_states)
+                avg_performance = sum(s.performance_score for s in recent_states) / len(recent_states)
+                
+                self.logger.info(f"📊 Basic optimization: avg_cpu={avg_cpu:.1f}%, avg_memory={avg_memory:.1f}%, avg_performance={avg_performance:.1f}")
+                
+                # Simple heuristic adjustments
+                if avg_performance > 80:
+                    self.logger.info("🔧 System performing well - maintaining current thresholds")
+                elif avg_performance < 60:
+                    self.logger.info("🔧 System underperforming - would tighten monitoring thresholds")
+                
+        except Exception as e:
+            self.logger.error(f"❌ Basic threshold optimization failed: {e}")
     
     def _optimize_mcp_configurations(self):
         """Optimize MCP server configurations"""

@@ -52,14 +52,28 @@ class SecurityManager:
         logger = logging.getLogger('SecurityManager')
         logger.setLevel(logging.INFO)
         
-        # Secure log handler
-        log_path = Path.cwd() / 'logs' / 'security.log'
-        handler = logging.FileHandler(log_path)
-        formatter = logging.Formatter(
-            '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
-        )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
+        # Ensure logs directory exists
+        log_dir = Path.cwd() / 'logs'
+        log_dir.mkdir(exist_ok=True)
+        
+        try:
+            # Secure log handler
+            log_path = log_dir / 'security.log'
+            handler = logging.FileHandler(log_path)
+            formatter = logging.Formatter(
+                '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
+            )
+            handler.setFormatter(formatter)
+            logger.addHandler(handler)
+        except Exception as e:
+            # Fallback to console logging if file logging fails
+            console_handler = logging.StreamHandler()
+            formatter = logging.Formatter(
+                '%(asctime)s - SECURITY - %(levelname)s - %(message)s'
+            )
+            console_handler.setFormatter(formatter)
+            logger.addHandler(console_handler)
+            logger.warning(f"Could not create file logger, using console: {e}")
         
         return logger
     
