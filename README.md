@@ -15,11 +15,13 @@ Steven is an advanced AI-powered network managing agent and autonomous repair te
 - Real-time monitoring and response
 
 ### 🛡️ Security
-- Enterprise-grade authentication (admin: daniel/werds)
-- Secure API key management
+- Enterprise-grade authentication with bcrypt password hashing
+- Environment-based configuration (no hardcoded credentials)
+- JWT token-based API authentication
 - Command validation and whitelisting
 - Comprehensive audit logging
 - Rate limiting and abuse prevention
+- Secure session management
 
 ### 📊 Professional Dashboard
 - Modern 2025 glassmorphism UI design
@@ -75,14 +77,51 @@ Steven never shows services as "down" - instead displays:
 - **Monitoring**: psutil, Docker SDK
 - **Security**: bcrypt, JWT, rate limiting
 
-## Deployment
+## Installation & Setup
 
-Steven is deployed on minicloud server (192.168.2.2) with:
-- Systemd service management
-- Auto-start on boot
-- UFW firewall configuration
-- Secure file permissions
-- Professional admin dashboard at port 5001
+### Quick Start
+
+1. **Clone the repository**:
+   ```bash
+   git clone <repository-url>
+   cd steven-ai-network-manager
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Configure environment** (Interactive setup):
+   ```bash
+   python setup.py
+   ```
+   
+   Or manually copy `.env.example` to `.env` and configure your settings.
+
+4. **Run Steven**:
+   ```bash
+   python main.py
+   ```
+
+### Environment Variables
+
+Required configuration (see `.env.example`):
+- `ADMIN_USERNAME`: Admin username
+- `ADMIN_PASSWORD_HASH`: Bcrypt hashed admin password
+- `MINICLOUD_IP`: Server IP address
+- `OPENAI_API_KEY`: OpenAI API key (optional)
+- `JWT_SECRET_KEY`: JWT signing key (auto-generated)
+- `SESSION_SECRET_KEY`: Session encryption key (auto-generated)
+
+### Production Deployment
+
+For production deployment on minicloud server:
+- Use systemd service management
+- Configure auto-start on boot
+- Set up UFW firewall rules
+- Ensure secure file permissions (600 for .env)
+- Access dashboard at configured IP:port
 
 ## Architecture
 
@@ -106,7 +145,7 @@ Steven AI System Manager
 
 Built using MCP servers and tools with Claude Code assistant.
 
-**Admin Access**: daniel / werds
+**Configuration**: Use `python setup.py` for secure interactive setup
 
 ---
 

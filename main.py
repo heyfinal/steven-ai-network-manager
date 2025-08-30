@@ -6,19 +6,29 @@ AI Systems Manager - Main Entry Point
 This is the main entry point that starts both the Meta Network Agent
 and the Professional Admin Dashboard simultaneously.
 
-Admin Credentials: daniel/werds (HARDCODED)
+Environment configuration required - see .env.example
 """
 import sys
 import subprocess
 import threading
 import time
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from core.meta_agent import start_meta_agent, ADMIN_USER, ADMIN_PASSWORD, MINICLOUD_IP
+from core.meta_agent import start_meta_agent
 from dashboard.dashboard import app, socketio
+
+# Configuration from environment
+ADMIN_USER = os.getenv('ADMIN_USERNAME', 'admin')
+MINICLOUD_IP = os.getenv('MINICLOUD_IP', '127.0.0.1')
+DASHBOARD_PORT = int(os.getenv('DASHBOARD_PORT', '5001'))
 
 
 def start_meta_agent_process():
@@ -39,11 +49,11 @@ def start_meta_agent_process():
 def start_dashboard_process():
     """Start the Professional Admin Dashboard"""
     print("📊 Starting Professional Admin Dashboard...")
-    print(f"🌐 Dashboard URL: http://{MINICLOUD_IP}:5001")
-    print(f"🔐 Admin Login: {ADMIN_USER} / {ADMIN_PASSWORD}")
+    print(f"🌐 Dashboard URL: http://{MINICLOUD_IP}:{DASHBOARD_PORT}")
+    print(f"🔐 Admin Login: {ADMIN_USER} / <secure password>")
     
     # Start dashboard with SocketIO
-    socketio.run(app, host='0.0.0.0', port=5001, debug=False)
+    socketio.run(app, host='0.0.0.0', port=DASHBOARD_PORT, debug=False)
 
 
 def main():
@@ -54,7 +64,7 @@ def main():
     print("🛡️  Self-Healing: ENABLED")
     print("🧬 AI Evolution: ACTIVE") 
     print("📊 Professional Dashboard: BULLETPROOF")
-    print(f"🔐 Admin Access: {ADMIN_USER} (credentials locked)")
+    print(f"🔐 Admin Access: {ADMIN_USER} (secure authentication)")
     print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     
     try:

@@ -6,7 +6,7 @@ Meta Network AI Agent - Autonomous Systems Manager
 This agent has full autonomy with admin/sudo powers to manage the entire minicloud infrastructure.
 It uses MCP servers, Docker, and AI to maintain, heal, and evolve the system without human intervention.
 
-Admin Credentials: daniel/werds (HARDCODED - NEVER FORGET)
+Configuration loaded from environment variables - see .env.example
 """
 import asyncio
 import aiohttp
@@ -35,11 +35,24 @@ from sklearn.ensemble import IsolationForest, RandomForestClassifier
 from sklearn.preprocessing import StandardScaler
 
 
-# HARDCODED ADMIN CREDENTIALS - NEVER CHANGE
-ADMIN_USER = "daniel"
-ADMIN_PASSWORD = "werds"
-MINICLOUD_IP = "192.168.2.2"
-OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', 'YOUR_API_KEY_HERE')
+# Load configuration from environment
+from dotenv import load_dotenv
+load_dotenv()
+
+ADMIN_USER = os.getenv('ADMIN_USERNAME', 'admin')
+MINICLOUD_IP = os.getenv('MINICLOUD_IP', '127.0.0.1')
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')
+
+if not OPENAI_API_KEY:
+    print("⚠️  WARNING: OPENAI_API_KEY not set - AI features disabled")
+
+# Validate required environment variables
+required_vars = ['ADMIN_USERNAME', 'ADMIN_PASSWORD_HASH', 'MINICLOUD_IP']
+missing_vars = [var for var in required_vars if not os.getenv(var)]
+if missing_vars:
+    print(f"❌ Missing required environment variables: {', '.join(missing_vars)}")
+    print("Please copy .env.example to .env and configure your settings")
+    sys.exit(1)
 
 
 @dataclass
